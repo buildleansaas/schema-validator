@@ -35,7 +35,7 @@
     }
   },
   "bin": {
-    "schema-validate": "./bin/schema-validate.js"
+    "schema-validate": "bin/schema-validate.js"
   },
   "files": [
     "dist",
