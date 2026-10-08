@@ -1,0 +1,62 @@
+{
+  "name": "@buildleansaas/schema-validator",
+  "version": "0.1.0",
+  "description": "Validate JSON-LD, microdata, and RDFa against the schema.org vocabulary and Google's rich result requirements. Library + CLI.",
+  "keywords": [
+    "schema.org",
+    "structured data",
+    "json-ld",
+    "microdata",
+    "rdfa",
+    "rich results",
+    "seo",
+    "validator",
+    "schema markup"
+  ],
+  "homepage": "https://www.swiftschema.com/tools/schema-validator",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/buildleansaas/schema-validator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/buildleansaas/schema-validator/issues"
+  },
+  "license": "MIT",
+  "author": "Build Lean SaaS (https://www.buildleansaas.com)",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "schema-validate": "./bin/schema-validate.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --target node18",
+    "test": "npm run build && node test/engine.test.mjs && node test/cli.test.mjs",
+    "vocab": "node scripts/build-schemaorg-vocab.mjs"
+  },
+  "dependencies": {
+    "htmlparser2": "10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsup": "8.3.5",
+    "typescript": "5.6.3"
+  }
+}
