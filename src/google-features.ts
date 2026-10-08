@@ -62,6 +62,10 @@ export const REVIEWABLE_TYPES = [
   "MediaObject", "Movie", "MusicPlaylist", "MusicRecording", "Organization", "Product", "Recipe", "SoftwareApplication",
 ];
 
+// A product or app is only eligible through its rating or review if that nested item is valid too.
+const NESTED_RATING: NestedRule = { via: "aggregateRating", label: "AggregateRating", types: ["AggregateRating"], required: [req("ratingValue"), { anyOf: ["ratingCount", "reviewCount"], label: "ratingCount or reviewCount" }] };
+const NESTED_REVIEW: NestedRule = { via: "review", label: "Review", types: ["Review"], required: [req("author"), req("reviewRating.ratingValue")] };
+
 export const GOOGLE_FEATURES: FeatureDefinition[] = [
   {
     id: "article", name: "Article", docsUrl: `${DOCS}article`, status: "supported",
@@ -206,6 +210,8 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
     nested: [
       { via: "offers", label: "Offer", types: ["Offer"], excludeTypes: ["AggregateOffer"], required: [{ anyOf: ["price", "priceSpecification.price"], label: "price" }], recommended: list("availability", "priceCurrency", "priceValidUntil") },
       { via: "offers", label: "AggregateOffer", types: ["AggregateOffer"], required: list("lowPrice", "priceCurrency"), recommended: list("highPrice", "offerCount") },
+      NESTED_RATING,
+      NESTED_REVIEW,
     ],
   },
   {
@@ -231,6 +237,7 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
     types: ["SoftwareApplication"],
     required: [req("name"), req("offers.price"), { anyOf: ["aggregateRating", "review"], label: "aggregateRating or review" }],
     recommended: list("applicationCategory", "operatingSystem"),
+    nested: [NESTED_RATING, NESTED_REVIEW],
   },
   {
     id: "vacation-rental", name: "Vacation rental", docsUrl: `${DOCS}vacation-rental`, status: "supported",

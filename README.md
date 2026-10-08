@@ -62,6 +62,10 @@ report.nodes;     // the extracted items, as a tree
 
 `extractStructuredData(input)` returns just the extracted items (JSON-LD, microdata, and RDFa in one model). `GOOGLE_FEATURES` and `RETIRED_FEATURES` expose the rule tables. CommonJS (`require`) works too.
 
+## Chrome extension
+
+`extension/` contains a Chrome extension (Manifest V3) built on the same engine. It validates the page you're looking at, including JSON-LD added by JavaScript, because it reads the rendered DOM. It only asks for `activeTab` and `scripting` and sends nothing anywhere. Build it with `node extension/build.mjs`.
+
 ## What it doesn't do
 
 - **Run JavaScript.** It reads the HTML you give it. If a page adds JSON-LD in the browser, validate the rendered HTML (for example from a headless browser or Chrome DevTools).

@@ -303,4 +303,11 @@ check("parse error names don't depend on the JS engine's wording (Node 18, Safar
   assert.equal(googleParseErrorName("Unexpected end of JSON input", '{"a":'), "Invalid JSON document — the block ends early (missing a closing quote, brace, or bracket)");
 });
 
+check("a product's rating must itself be valid for the product snippet", () => {
+  const report = validateMarkup(ld({ "@type": "Product", name: "Widget", aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9" } }));
+  assert.deepEqual(feature(report, "product-snippet").missingRequired, ["AggregateRating: ratingCount or reviewCount"]);
+  const app = validateMarkup(ld({ "@type": "SoftwareApplication", name: "App", offers: { "@type": "Offer", price: 0 }, review: { "@type": "Review", reviewRating: { "@type": "Rating", ratingValue: 5 } } }));
+  assert.deepEqual(feature(app, "software-app").missingRequired, ["Review: author"]);
+});
+
 console.log(`validator engine: ${checks} checks passed`);
