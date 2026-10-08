@@ -1,6 +1,6 @@
 // Engine contract tests (run against the built package).
 import assert from "node:assert/strict";
-import { extractStructuredData, validateMarkup } from "../dist/index.js";
+import { extractStructuredData, googleParseErrorName, validateMarkup } from "../dist/index.js";
 
 
 const ld = (value) => JSON.stringify({ "@context": "https://schema.org", ...value });
@@ -290,6 +290,17 @@ check("LocalBusiness menu: Google still documents it, hasMenu also satisfies", (
 check("WebSite SearchAction gets the retired sitelinks search box note", () => {
   const report = validateMarkup(ld({ "@type": "WebSite", url: "https://example.com", potentialAction: { "@type": "SearchAction", target: "https://example.com/?q={q}", "query-input": "required name=q" } }));
   assert.equal(find(report, /sitelinks search box/).severity, "info");
+});
+
+check("parse error names don't depend on the JS engine's wording (Node 18, Safari, Firefox)", () => {
+  const trailing = '{"a":1,}';
+  assert.match(googleParseErrorName("Unexpected token } in JSON at position 7", trailing, 7), /trailing comma/);
+  assert.match(googleParseErrorName("JSON.parse: expected double-quoted property name at line 1 column 8", trailing, 7), /trailing comma/);
+  const missingComma = '{"a":1 "b":2}';
+  assert.equal(googleParseErrorName("Unexpected string in JSON at position 7", missingComma, 7), "Parsing error: Missing ',' or '}'");
+  const arrayComma = '["a" "b"]';
+  assert.equal(googleParseErrorName("Unexpected string in JSON at position 5", arrayComma, 5), "Parsing error: Missing ',' or ']' in array declaration");
+  assert.equal(googleParseErrorName("Unexpected end of JSON input", '{"a":'), "Invalid JSON document — the block ends early (missing a closing quote, brace, or bracket)");
 });
 
 console.log(`validator engine: ${checks} checks passed`);

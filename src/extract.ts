@@ -39,13 +39,51 @@ function lineAndColumn(text: string, position: number): { line: number; column: 
   return { line: lines.length, column: lines[lines.length - 1].length + 1 };
 }
 
-function parseErrorLocation(error: unknown, text: string): { message: string; line?: number; column?: number } {
+function parseErrorLocation(error: unknown, text: string): { message: string; line?: number; column?: number; position?: number } {
   const message = error instanceof Error ? error.message : String(error);
-  const lineMatch = message.match(/line (\d+) column (\d+)/);
-  if (lineMatch) return { message, line: Number(lineMatch[1]), column: Number(lineMatch[2]) };
   const positionMatch = message.match(/position (\d+)/);
-  if (positionMatch) return { message, ...lineAndColumn(text, Number(positionMatch[1])) };
+  const lineMatch = message.match(/line (\d+) column (\d+)/);
+  if (positionMatch) {
+    const position = Number(positionMatch[1]);
+    return { message, position, ...lineAndColumn(text, position) };
+  }
+  if (lineMatch) return { message, line: Number(lineMatch[1]), column: Number(lineMatch[2]) };
   return { message };
+}
+
+/**
+ * Names a JSON parse error the way Search Console's Unparsable structured data report does.
+ * Parser messages differ between engines and versions, so this looks at the text around the
+ * error position first and only falls back to the message.
+ */
+export function googleParseErrorName(message: string, text?: string, position?: number): string | undefined {
+  if (text !== undefined && position !== undefined) {
+    const before = text.slice(0, position).trimEnd();
+    const previous = before[before.length - 1];
+    const current = text.slice(position).trimStart()[0];
+    if (previous === "," && (current === "}" || current === "]")) return "Parsing error: Missing '}' or object member name — often a trailing comma";
+    if (current === '"' && previous !== undefined && /["\d}\]el]/.test(previous)) {
+      // A new string where a comma was expected: inside an array or an object?
+      let depth = 0;
+      for (let index = before.length - 1; index >= 0; index -= 1) {
+        const char = before[index];
+        if (char === "}" || char === "]") depth += 1;
+        else if (char === "{" || char === "[") {
+          if (depth === 0) return char === "[" ? "Parsing error: Missing ',' or ']' in array declaration" : "Parsing error: Missing ',' or '}'";
+          depth -= 1;
+        }
+      }
+    }
+  }
+  if (/Expected double-quoted property name/i.test(message)) return "Parsing error: Missing '}' or object member name — often a trailing comma";
+  if (/Expected ',' or '}' after property value/i.test(message)) return "Parsing error: Missing ',' or '}'";
+  if (/Expected ':' after property name/i.test(message)) return "Parsing error: Missing ':'";
+  if (/Expected ',' or ']' after array element/i.test(message)) return "Parsing error: Missing ',' or ']' in array declaration";
+  if (/Bad escaped character|Bad Unicode escape/i.test(message)) return "Bad escape sequence in string";
+  if (/Unexpected end of JSON input|Unterminated string/i.test(message)) return "Invalid JSON document — the block ends early (missing a closing quote, brace, or bracket)";
+  if (/Bad control character/i.test(message)) return "Invalid JSON document — a raw line break or tab inside a string";
+  if (/Unexpected token|Unexpected non-whitespace|Unexpected string|Unexpected number/i.test(message)) return "Invalid JSON document";
+  return undefined;
 }
 
 /**
@@ -162,7 +200,8 @@ function extractJsonLdBlock(text: string, block: number, lineOffset: number, out
     parsed = JSON.parse(cleaned);
   } catch (error) {
     const location = parseErrorLocation(error, cleaned);
-    const issue: SyntaxIssue = { format: "json-ld", block, message: location.message };
+    const googleName = googleParseErrorName(location.message, cleaned, location.position);
+    const issue: SyntaxIssue = { format: "json-ld", block, message: googleName ? `${googleName} (${location.message})` : location.message };
     if (location.line) {
       issue.line = location.line + lineOffset + skippedLines;
       issue.column = location.column;

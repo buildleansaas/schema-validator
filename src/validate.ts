@@ -383,19 +383,6 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
 
 // ---------------------------------------------------------------------------------------------
 
-// Maps the JSON parser's messages to the names Search Console uses in its Unparsable structured data report.
-function googleParseErrorName(message: string): string | undefined {
-  if (/Expected double-quoted property name/i.test(message)) return "Parsing error: Missing '}' or object member name — often a trailing comma";
-  if (/Expected ',' or '}' after property value/i.test(message)) return "Parsing error: Missing ',' or '}'";
-  if (/Expected ':' after property name/i.test(message)) return "Parsing error: Missing ':'";
-  if (/Expected ',' or ']' after array element/i.test(message)) return "Parsing error: Missing ',' or ']' in array declaration";
-  if (/Bad escaped character|Bad Unicode escape/i.test(message)) return "Bad escape sequence in string";
-  if (/Unexpected end of JSON input|Unterminated string/i.test(message)) return "Invalid JSON document — the block ends early (missing a closing quote, brace, or bracket)";
-  if (/Bad control character/i.test(message)) return "Invalid JSON document — a raw line break or tab inside a string";
-  if (/Unexpected token|Unexpected non-whitespace/i.test(message)) return "Invalid JSON document";
-  return undefined;
-}
-
 export function validateExtraction(extraction: Extraction): ValidationReport {
   const issues: ValidationIssue[] = [];
   for (const syntax of extraction.syntaxIssues) {
@@ -407,8 +394,7 @@ export function validateExtraction(extraction: Extraction): ValidationReport {
       issues.push({ severity: syntax.severity, category: "syntax", message: `JSON-LD block ${syntax.block}: ${syntax.message}`, path: syntax.path ?? `JSON-LD block ${syntax.block}`, fix: syntax.fix });
       continue;
     }
-    const googleName = googleParseErrorName(syntax.message);
-    issues.push({ severity: "error", category: "syntax", message: `JSON-LD block ${syntax.block}: ${googleName ? `${googleName} (${syntax.message})` : syntax.message}`, path: syntax.line ? `JSON-LD block ${syntax.block}, line ${syntax.line}${syntax.column ? `, column ${syntax.column}` : ""}` : `JSON-LD block ${syntax.block}`, fix: "Fix the JSON syntax (a missing comma, quote, or bracket is the usual cause). Google ignores a block it can't parse." });
+    issues.push({ severity: "error", category: "syntax", message: `JSON-LD block ${syntax.block}: ${syntax.message}`, path: syntax.line ? `JSON-LD block ${syntax.block}, line ${syntax.line}${syntax.column ? `, column ${syntax.column}` : ""}` : `JSON-LD block ${syntax.block}`, fix: "Fix the JSON syntax (a missing comma, quote, or bracket is the usual cause). Google ignores a block it can't parse." });
   }
   for (const context of extraction.contextIssues) {
     issues.push({ severity: context.severity, category: "syntax", message: context.message, fix: context.fix, path: `JSON-LD block ${context.block}` });
