@@ -8,11 +8,20 @@ Validate structured data the way search engines read it. Give it JSON-LD, or an 
 
 There's a hosted version with a UI at **[swiftschema.com/tools/schema-validator](https://www.swiftschema.com/tools/schema-validator)**, and a [Rich Results Test tool](https://www.swiftschema.com/tools/rich-results-test) built on the same engine.
 
+## Install
+
+```sh
+npm install @buildleansaas/schema-validator   # once published to npm
+npm install github:buildleansaas/schema-validator   # works today
+```
+
 ## CLI
 
 ```sh
 # Validate a built site (exits 1 if any page has errors, so it works in CI)
 npx @buildleansaas/schema-validator ./out
+# or, straight from GitHub:
+npx github:buildleansaas/schema-validator ./out
 
 # A single file or a live URL
 npx @buildleansaas/schema-validator ./public/index.html
