@@ -28,3 +28,11 @@ jobs:
       - run: npm ci
       - run: npx tsc -p .
       - run: npm test
+      # Local test servers don't reproduce #1; a live HTTPS site on Windows Node 24.16.0 did
+      # (Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)). Needs network access.
+      - if: matrix.os == 'windows-latest' && matrix.node == '24.16.0'
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            node bin/schema-validate.js https://example.com --fail-on never > /dev/null
+          done
