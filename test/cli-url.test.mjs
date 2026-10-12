@@ -1,7 +1,8 @@
 // CLI URL-mode tests against local HTTP and HTTPS servers. Runs the CLI asynchronously so this
 // process can keep serving, and checks the exit code. On Windows with Node 24.16, exiting with
 // process.exit() after an HTTPS fetch aborted with a libuv assertion (#1). The certificate in
-// test/fixtures/tls is a self-signed, test-only certificate for 127.0.0.1.
+// test/fixtures/tls is a self-signed, test-only certificate for localhost. The
+// URLs use the name "localhost" so the CLI does a DNS lookup, as it does for real sites.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -20,7 +21,7 @@ const handler = (request, response) => {
 const tls = { key: fs.readFileSync("test/fixtures/tls/key.pem"), cert: fs.readFileSync("test/fixtures/tls/cert.pem") };
 const servers = [http.createServer(handler), https.createServer(tls, handler)];
 for (const server of servers) await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const [base, secureBase] = servers.map((server, index) => `${index ? "https" : "http"}://127.0.0.1:${server.address().port}`);
+const [base, secureBase] = servers.map((server, index) => `${index ? "https" : "http"}://localhost:${server.address().port}`);
 
 const run = (...args) =>
   new Promise((resolve) => {
