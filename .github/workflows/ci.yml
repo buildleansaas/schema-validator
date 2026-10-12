@@ -12,13 +12,13 @@ jobs:
         os: [ubuntu-latest]
         node: [18, 20, 22]
         include:
-          # URL mode used to abort on Windows after printing (#1).
           - os: windows-latest
             node: 22
           - os: windows-latest
             node: 24
+          # Exiting with process.exit() after an HTTPS fetch aborts on this version (#1).
           - os: windows-latest
-            node: 24.16.0 # TEMP: reporter's version in #1
+            node: 24.16.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,11 +28,3 @@ jobs:
       - run: npm ci
       - run: npx tsc -p .
       - run: npm test
-      # TEMP experiment for #1: live HTTPS URL on Windows. Removed before merge.
-      - if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          for i in 1 2 3 4 5; do
-            node bin/schema-validate.js https://example.com --fail-on never > /dev/null; code=$?
-            echo "run $i exit=$code"; [ $code -eq 0 ] || exit 1
-          done
