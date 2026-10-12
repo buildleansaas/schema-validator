@@ -91,4 +91,6 @@ for (const target of targets.flatMap(collect)) {
 }
 
 if (json) console.log(JSON.stringify(results, null, 2));
-process.exit(failed ? 1 : 0);
+// Set exitCode rather than calling process.exit(): exiting while fetch's socket handle is still
+// closing aborts Node on Windows (libuv assertion in src\win\async.c). See #1.
+process.exitCode = failed ? 1 : 0;

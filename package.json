@@ -48,7 +48,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean --target node18",
-    "test": "npm run build && node test/engine.test.mjs && node test/cli.test.mjs",
+    "test": "npm run build && node test/engine.test.mjs && node test/cli.test.mjs && node test/cli-url.test.mjs",
     "vocab": "node scripts/build-schemaorg-vocab.mjs",
     "prepare": "npm run build"
   },
