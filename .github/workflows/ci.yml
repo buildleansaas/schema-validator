@@ -17,6 +17,8 @@ jobs:
             node: 22
           - os: windows-latest
             node: 24
+          - os: windows-latest
+            node: 24.16.0 # TEMP: reporter's version in #1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
