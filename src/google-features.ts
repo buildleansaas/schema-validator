@@ -7,8 +7,8 @@
 //   "^name"       the parent node's property (Google allows the parent's name for nested reviews)
 import type { FeatureStatus } from "./types";
 
-// Breadcrumb and Site name re-verified 2026-11-06; the other features were last verified 2026-10-07.
-export const GOOGLE_RULES_VERIFIED = "2026-11-06";
+/** The oldest verification date across the rules. Features re-verified later carry their own `verified`. */
+export const GOOGLE_RULES_VERIFIED = "2026-10-07";
 
 export interface Requirement {
   anyOf: string[];
@@ -59,6 +59,8 @@ export interface FeatureDefinition {
   recommended: Requirement[];
   nested?: NestedRule[];
   note?: string;
+  /** When this feature was last verified against Google's docs, if later than GOOGLE_RULES_VERIFIED. */
+  verified?: string;
 }
 
 const req = (...paths: string[]): Requirement => ({ anyOf: paths });
@@ -86,7 +88,7 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
   // "a BreadcrumbList that contains at least two ListItems"; the last ListItem may omit item.
   {
     id: "breadcrumb", name: "Breadcrumb", docsUrl: `${DOCS}breadcrumb`, status: "supported",
-    matchNested: true, types: ["BreadcrumbList"],
+    matchNested: true, types: ["BreadcrumbList"], verified: "2026-11-06",
     required: list("itemListElement"),
     recommended: [],
     nested: [{
@@ -292,7 +294,7 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
   // "must be on the home page of the site" (domain or subdomain root; subdirectories aren't supported).
   {
     id: "site-name", name: "Site name", docsUrl: "https://developers.google.com/search/docs/appearance/site-names", status: "supported",
-    types: ["WebSite"], homePageOnly: true,
+    types: ["WebSite"], homePageOnly: true, verified: "2026-11-06",
     required: list("name", "url"),
     recommended: list("alternateName"),
   },

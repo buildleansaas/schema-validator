@@ -151,6 +151,50 @@ check("site name is skipped off the home page and when the page is unknown", () 
   assert.equal(errors(validateMarkup(markup)).filter((issue) => /Site name/.test(issue.message)).length, 0);
 });
 
+check("an empty BreadcrumbList gives one error, not two", () => {
+  const report = validateMarkup(ld({ "@type": "BreadcrumbList" }));
+  assert.deepEqual(feature(report, "breadcrumb").missingRequired, ["itemListElement"]);
+  assert.equal(errors(report).filter((issue) => /Breadcrumb/.test(issue.message)).length, 1);
+});
+
+check("untyped breadcrumb entries don't count as ListItems and are named", () => {
+  const report = validateMarkup(ld({ "@type": "BreadcrumbList", itemListElement: [
+    { position: 1, name: "Books", item: "https://example.com/books" },
+    { position: 2, name: "Sci-fi" },
+  ] }));
+  assert.deepEqual(feature(report, "breadcrumb").missingRequired, ["itemListElement (at least 2 ListItems, found 0; 2 entries aren't ListItems)"]);
+});
+
+check("site name: home page detection", () => {
+  const markup = ld({ "@type": "WebSite", alternateName: "EX" });
+  assert.equal(feature(validateMarkup(markup, { pageUrl: "https://example.com/index.html" }), "site-name"), undefined, "index.html is not the root URI");
+  const sub = validateMarkup(ld({ "@type": "WebSite", name: "Docs", url: "https://docs.example.com/" }), { pageUrl: "https://docs.example.com/" });
+  assert.equal(feature(sub, "site-name").result, "eligible", "a subdomain root is a home page");
+  const forced = validateMarkup(markup, { isHomePage: true, pageUrl: "https://example.com/news" });
+  assert.deepEqual(feature(forced, "site-name").missingRequired, ["name", "url"], "isHomePage overrides pageUrl");
+});
+
+check("site name: a WebSite url on another origin is a warning", () => {
+  const off = validateMarkup(ld({ "@type": "WebSite", name: "Example", url: "https://other.com/" }), { pageUrl: "https://example.com/" });
+  const issue = find(off, /url should be this site's home page/);
+  assert.equal(issue.severity, "warning");
+  assert.equal(feature(off, "site-name").result, "eligible");
+  const relative = validateMarkup(ld({ "@type": "WebSite", name: "Example", url: "/" }), { pageUrl: "https://example.com/" });
+  assert.equal(find(relative, /url should be this site's home page/), undefined);
+  const noUrl = validateMarkup(ld({ "@type": "WebSite", name: "Example", url: "https://other.com/" }), { isHomePage: true });
+  assert.equal(find(noUrl, /url should be this site's home page/), undefined, "no page URL, no origin check");
+});
+
+check("features carry their own verified date; the global date is unchanged", () => {
+  const report = validateMarkup(ld({ "@graph": [
+    { "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "A", item: "https://example.com/a" }, { "@type": "ListItem", position: 2, name: "B" }] },
+    { "@type": "Recipe", name: "Soup", image: "https://example.com/soup.jpg" },
+  ] }));
+  assert.equal(report.googleRulesVerified, "2026-10-07");
+  assert.equal(feature(report, "breadcrumb").verified, "2026-11-06");
+  assert.equal(feature(report, "recipe").verified, "2026-10-07");
+});
+
 check("Article has no required properties", () => {
   const report = validateMarkup(ld({ "@type": "NewsArticle", headline: "Hello" }));
   assert.equal(feature(report, "article").result, "eligible");

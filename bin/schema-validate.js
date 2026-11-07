@@ -50,10 +50,11 @@ function collect(target) {
 }
 
 async function read(target) {
-  if (!/^https?:\/\//.test(target)) return fs.readFileSync(target, "utf8");
+  if (!/^https?:\/\//.test(target)) return { text: fs.readFileSync(target, "utf8") };
   const response = await fetch(target, { headers: { "user-agent": "schema-validate (+https://github.com/buildleansaas/schema-validator)" } });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+  // The final URL after redirects is the page the markup belongs to.
+  return { text: await response.text(), pageUrl: response.url || target };
 }
 
 const SEVERITY = { error: 2, warning: 1, info: 0 };
@@ -64,7 +65,8 @@ const results = [];
 for (const target of targets.flatMap(collect)) {
   let report;
   try {
-    report = validateMarkup(await read(target), /^https?:\/\//.test(target) ? { pageUrl: target } : {});
+    const page = await read(target);
+    report = validateMarkup(page.text, page.pageUrl ? { pageUrl: page.pageUrl } : {});
   } catch (error) {
     console.error(`${target}: ${error.message}`);
     failed = true;

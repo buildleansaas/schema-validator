@@ -95,7 +95,7 @@ curl -sL -o /tmp/schemaorg.jsonld https://schema.org/version/latest/schemaorg-cu
 npm run vocab -- /tmp/schemaorg.jsonld <version>
 ```
 
-The Google rules live in `src/google-features.ts`, with the date they were last verified against Google's docs.
+The Google rules live in `src/google-features.ts`. `GOOGLE_RULES_VERIFIED` is the oldest date they were verified against Google's docs; features re-verified later carry their own `verified` date, and each feature report includes it.
 
 ## License
 

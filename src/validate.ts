@@ -294,7 +294,13 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
         return !(rule.excludeTypes && matchesAny(childTypes, rule.excludeTypes));
       });
     if (rule.requireOne && children.length === 0) missingRequired.push(`${rule.via} (${rule.label})`);
-    if (rule.minItems && children.length < rule.minItems) missingRequired.push(`${rule.via} (at least ${rule.minItems} ${rule.label}s, found ${children.length})`);
+    // Skipped when the property is missing altogether: that's already one missing-required error.
+    // Only entries typed as the rule's type count ("at least two ListItems"); others are named.
+    if (rule.minItems && graph.has(node, rule.via) && children.length < rule.minItems) {
+      const others = graph.valuesAt(node, rule.via).filter((value) => !graph.resolve(value).some((child) => children.includes(child))).length;
+      const detail = others ? `; ${others} ${others === 1 ? `entry isn't a ${rule.label}` : `entries aren't ${rule.label}s`}` : "";
+      missingRequired.push(`${rule.via} (at least ${rule.minItems} ${rule.label}s, found ${children.length}${detail})`);
+    }
     children.forEach((child, index) => {
       const isLast = index === children.length - 1;
       const prefix = children.length > 1 ? `${rule.label} ${index + 1}` : rule.label;
@@ -320,6 +326,7 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
     type,
     missingRequired,
     missingRecommended,
+    verified: feature.verified ?? GOOGLE_RULES_VERIFIED,
   };
 }
 
@@ -336,8 +343,19 @@ function resolveHomePage(options: ValidateOptions): boolean | undefined {
   }
 }
 
+function pageOriginOf(pageUrl: string | undefined): string | undefined {
+  if (!pageUrl) return undefined;
+  try {
+    const url = new URL(pageUrl);
+    return /^https?:$/.test(url.protocol) ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function checkGoogle(graph: Graph, issues: ValidationIssue[], options: ValidateOptions): FeatureReport[] {
   const homePage = resolveHomePage(options);
+  const pageOrigin = pageOriginOf(options.pageUrl);
   const reports: FeatureReport[] = [];
   const checkedIds = new Set<string>();
   for (const node of graph.all) {
@@ -371,8 +389,21 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[], options: ValidateO
     for (const retired of RETIRED_FEATURES) {
       if (!retired.types.length || !matchesAny(types, retired.types)) continue;
       if (retired.excludeTypes && matchesAny(types, retired.excludeTypes)) continue;
-      reports.push({ id: `retired-${retired.name.toLowerCase().replace(/\W+/g, "-")}`, name: retired.name, docsUrl: retired.source, status: retired.status, statusNote: retired.note, result: "retired", path: node.path, type: types[0], missingRequired: [], missingRecommended: [] });
+      reports.push({ id: `retired-${retired.name.toLowerCase().replace(/\W+/g, "-")}`, name: retired.name, docsUrl: retired.source, status: retired.status, statusNote: retired.note, result: "retired", path: node.path, type: types[0], missingRequired: [], missingRecommended: [], verified: GOOGLE_RULES_VERIFIED });
       issues.push({ severity: "info", category: "google", path: node.path, type: types[0], message: `${types[0]} is valid schema.org, but Google's ${retired.name} rich result is ${retired.status === "retired" ? "retired" : "limited"}: ${retired.note}`, fix: "Keep it if it describes the page accurately; just don't expect that rich result.", docsUrl: retired.source });
+    }
+
+    // Site name: WebSite.url should be "the canonical home page of your site's domain or subdomain".
+    // A warning, not a missing-required error: the property is present, its value looks wrong.
+    if (homePage === true && pageOrigin && matchesAny(types, ["WebSite"])) {
+      for (const value of graph.valuesAt(node, "url")) {
+        if (value.kind !== "literal") continue;
+        let origin: string | undefined;
+        try { origin = new URL(String(value.value).trim(), options.pageUrl).origin; } catch { origin = undefined; }
+        if (origin && origin !== pageOrigin) {
+          issues.push({ severity: "warning", category: "google", path: node.path, type: "WebSite", property: "url", message: `Site name: url should be this site's home page (${pageOrigin}/), but it's ${String(value.value)}.`, fix: "Set url to the canonical home page of the domain or subdomain this markup is on.", docsUrl: "https://developers.google.com/search/docs/appearance/site-names" });
+        }
+      }
     }
 
     // The sitelinks search box was retired; SearchAction itself is still valid schema.org.

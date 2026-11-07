@@ -70,6 +70,8 @@ export interface FeatureReport {
   type: string;
   missingRequired: string[];
   missingRecommended: string[];
+  /** When this feature's rules were last verified against Google's docs (YYYY-MM-DD). */
+  verified: string;
 }
 
 export interface ValidationReport {
