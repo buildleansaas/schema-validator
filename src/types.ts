@@ -70,6 +70,8 @@ export interface FeatureReport {
   type: string;
   missingRequired: string[];
   missingRecommended: string[];
+  /** When this feature's rules were last verified against Google's docs (YYYY-MM-DD). */
+  verified: string;
 }
 
 export interface ValidationReport {
@@ -81,4 +83,14 @@ export interface ValidationReport {
   totals: { errors: number; warnings: number; infos: number };
   vocabularyVersion: string;
   googleRulesVerified: string;
+}
+
+export interface ValidateOptions {
+  /**
+   * The URL of the page being validated. Used for rules that depend on where the markup lives
+   * (Site name only applies on the home page). Without it (or isHomePage) those rules are skipped.
+   */
+  pageUrl?: string;
+  /** Overrides the home page check from pageUrl. */
+  isHomePage?: boolean;
 }

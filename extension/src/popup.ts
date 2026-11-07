@@ -43,7 +43,7 @@ async function main() {
   }
   try {
     const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => document.documentElement.outerHTML });
-    render(validateMarkup(String(result?.result ?? "")));
+    render(validateMarkup(String(result?.result ?? ""), { pageUrl: tab?.url }));
   } catch {
     app.innerHTML = `<p class="muted">Chrome doesn't let extensions read this page (browser pages and the Chrome Web Store are off limits). Open a regular website and try again.</p>`;
   }

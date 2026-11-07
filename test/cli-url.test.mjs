@@ -13,7 +13,13 @@ const pages = {
   "/clean": fs.readFileSync("test/fixtures/site/index.html", "utf8"),
   "/broken": fs.readFileSync("test/fixtures/site/blog/post.html", "utf8"),
 };
+pages["/"] = `<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","url":"/"}</script>`;
 const handler = (request, response) => {
+  if (request.url === "/go") {
+    response.writeHead(301, { location: "/" });
+    response.end();
+    return;
+  }
   const body = pages[request.url];
   response.writeHead(body ? 200 : 404, { "content-type": "text/html" });
   response.end(body ?? "not found");
@@ -55,5 +61,12 @@ for (let attempt = 0; attempt < 3; attempt++) {
 const secureBroken = await run(`${secureBase}/broken`);
 assert.equal(secureBroken.status, 1, secureBroken.output);
 
+// The CLI passes the final URL after redirects: /go isn't a home page, but it redirects to /,
+// so the Site name rule runs and finds the missing name.
+const redirected = await run(`${base}/go`, "--json");
+assert.equal(redirected.status, 1, redirected.output);
+const [redirectReport] = JSON.parse(redirected.output);
+assert.deepEqual(redirectReport.features.find((item) => item.id === "site-name")?.missingRequired, ["name"]);
+
 for (const server of servers) server.close();
-console.log("cli url: 6 checks passed");
+console.log("cli url: 7 checks passed");

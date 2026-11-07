@@ -1,6 +1,6 @@
 import { extractStructuredData } from "./extract";
 import { GOOGLE_FEATURES, GOOGLE_RULES_VERIFIED, RETIRED_FEATURES, REVIEWABLE_TYPES, type FeatureDefinition, type Requirement } from "./google-features";
-import type { Extraction, FeatureReport, SdNode, SdValue, ValidationIssue, ValidationReport } from "./types";
+import type { Extraction, FeatureReport, SdNode, SdValue, ValidateOptions, ValidationIssue, ValidationReport } from "./types";
 import {
   basePropertyName,
   getProperty,
@@ -294,6 +294,13 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
         return !(rule.excludeTypes && matchesAny(childTypes, rule.excludeTypes));
       });
     if (rule.requireOne && children.length === 0) missingRequired.push(`${rule.via} (${rule.label})`);
+    // Skipped when the property is missing altogether: that's already one missing-required error.
+    // Only entries typed as the rule's type count ("at least two ListItems"); others are named.
+    if (rule.minItems && graph.has(node, rule.via) && children.length < rule.minItems) {
+      const others = graph.valuesAt(node, rule.via).filter((value) => !graph.resolve(value).some((child) => children.includes(child))).length;
+      const detail = others ? `; ${others} ${others === 1 ? `entry isn't a ${rule.label}` : `entries aren't ${rule.label}s`}` : "";
+      missingRequired.push(`${rule.via} (at least ${rule.minItems} ${rule.label}s, found ${children.length}${detail})`);
+    }
     children.forEach((child, index) => {
       const isLast = index === children.length - 1;
       const prefix = children.length > 1 ? `${rule.label} ${index + 1}` : rule.label;
@@ -319,10 +326,36 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
     type,
     missingRequired,
     missingRecommended,
+    verified: feature.verified ?? GOOGLE_RULES_VERIFIED,
   };
 }
 
-function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
+/** True or false when the page is known to be (or not be) a domain/subdomain root; undefined when unknown. */
+function resolveHomePage(options: ValidateOptions): boolean | undefined {
+  if (typeof options.isHomePage === "boolean") return options.isHomePage;
+  if (!options.pageUrl) return undefined;
+  try {
+    const url = new URL(options.pageUrl);
+    if (!/^https?:$/.test(url.protocol)) return undefined;
+    return url.pathname === "/" || url.pathname === "";
+  } catch {
+    return undefined;
+  }
+}
+
+function pageOriginOf(pageUrl: string | undefined): string | undefined {
+  if (!pageUrl) return undefined;
+  try {
+    const url = new URL(pageUrl);
+    return /^https?:$/.test(url.protocol) ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function checkGoogle(graph: Graph, issues: ValidationIssue[], options: ValidateOptions): FeatureReport[] {
+  const homePage = resolveHomePage(options);
+  const pageOrigin = pageOriginOf(options.pageUrl);
   const reports: FeatureReport[] = [];
   const checkedIds = new Set<string>();
   for (const node of graph.all) {
@@ -340,6 +373,8 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
       if (!matchesAny(types, feature.types)) continue;
       if (feature.excludeTypes && matchesAny(types, feature.excludeTypes)) continue;
       if (!feature.matchNested && !isStandalone(context)) continue;
+      // Home-page-only features are skipped off the home page, and when the page is unknown.
+      if (feature.homePageOnly && homePage !== true) continue;
       if (feature.detectWhenAny && !feature.detectWhenAny.some((path) => graph.has(node, path))) continue;
       const report = checkFeature(graph, node, feature);
       reports.push(report);
@@ -354,8 +389,21 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
     for (const retired of RETIRED_FEATURES) {
       if (!retired.types.length || !matchesAny(types, retired.types)) continue;
       if (retired.excludeTypes && matchesAny(types, retired.excludeTypes)) continue;
-      reports.push({ id: `retired-${retired.name.toLowerCase().replace(/\W+/g, "-")}`, name: retired.name, docsUrl: retired.source, status: retired.status, statusNote: retired.note, result: "retired", path: node.path, type: types[0], missingRequired: [], missingRecommended: [] });
+      reports.push({ id: `retired-${retired.name.toLowerCase().replace(/\W+/g, "-")}`, name: retired.name, docsUrl: retired.source, status: retired.status, statusNote: retired.note, result: "retired", path: node.path, type: types[0], missingRequired: [], missingRecommended: [], verified: GOOGLE_RULES_VERIFIED });
       issues.push({ severity: "info", category: "google", path: node.path, type: types[0], message: `${types[0]} is valid schema.org, but Google's ${retired.name} rich result is ${retired.status === "retired" ? "retired" : "limited"}: ${retired.note}`, fix: "Keep it if it describes the page accurately; just don't expect that rich result.", docsUrl: retired.source });
+    }
+
+    // Site name: WebSite.url should be "the canonical home page of your site's domain or subdomain".
+    // A warning, not a missing-required error: the property is present, its value looks wrong.
+    if (homePage === true && pageOrigin && matchesAny(types, ["WebSite"])) {
+      for (const value of graph.valuesAt(node, "url")) {
+        if (value.kind !== "literal") continue;
+        let origin: string | undefined;
+        try { origin = new URL(String(value.value).trim(), options.pageUrl).origin; } catch { origin = undefined; }
+        if (origin && origin !== pageOrigin) {
+          issues.push({ severity: "warning", category: "google", path: node.path, type: "WebSite", property: "url", message: `Site name: url should be this site's home page (${pageOrigin}/), but it's ${String(value.value)}.`, fix: "Set url to the canonical home page of the domain or subdomain this markup is on.", docsUrl: "https://developers.google.com/search/docs/appearance/site-names" });
+        }
+      }
     }
 
     // The sitelinks search box was retired; SearchAction itself is still valid schema.org.
@@ -383,7 +431,7 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
 
 // ---------------------------------------------------------------------------------------------
 
-export function validateExtraction(extraction: Extraction): ValidationReport {
+export function validateExtraction(extraction: Extraction, options: ValidateOptions = {}): ValidationReport {
   const issues: ValidationIssue[] = [];
   for (const syntax of extraction.syntaxIssues) {
     if (syntax.format !== "json-ld") {
@@ -402,7 +450,7 @@ export function validateExtraction(extraction: Extraction): ValidationReport {
 
   const graph = new Graph(extraction.nodes);
   checkVocabulary(graph, issues);
-  const features = checkGoogle(graph, issues);
+  const features = checkGoogle(graph, issues, options);
 
   if (!extraction.nodes.length && !extraction.syntaxIssues.length) {
     issues.push({ severity: "info", category: "syntax", message: "No structured data found (no JSON-LD, microdata, or RDFa).", fix: "Paste JSON-LD, a <script type=\"application/ld+json\"> block, or HTML with microdata/RDFa." });
@@ -428,6 +476,6 @@ export function validateExtraction(extraction: Extraction): ValidationReport {
 }
 
 /** Validates raw JSON-LD or an HTML page/fragment containing JSON-LD, microdata, or RDFa. */
-export function validateMarkup(input: string): ValidationReport {
-  return validateExtraction(extractStructuredData(input));
+export function validateMarkup(input: string, options: ValidateOptions = {}): ValidationReport {
+  return validateExtraction(extractStructuredData(input), options);
 }
