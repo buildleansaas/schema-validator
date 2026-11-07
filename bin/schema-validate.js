@@ -64,7 +64,7 @@ const results = [];
 for (const target of targets.flatMap(collect)) {
   let report;
   try {
-    report = validateMarkup(await read(target));
+    report = validateMarkup(await read(target), /^https?:\/\//.test(target) ? { pageUrl: target } : {});
   } catch (error) {
     console.error(`${target}: ${error.message}`);
     failed = true;

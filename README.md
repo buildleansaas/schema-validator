@@ -4,7 +4,7 @@ Validate structured data the way search engines read it. Give it JSON-LD, or an 
 
 - **Syntax**: JSON parse errors with line and column, named the way Search Console names them ("Missing ',' or '}'"), plus duplicate keys and missing `@context` / `@type`.
 - **The schema.org vocabulary** (bundled, version 30.1): unknown types and properties with "did you mean" suggestions, properties used on a type they don't belong to (inheritance-aware), values in the wrong form (dates, durations, prices, currency codes, rating scales, enumeration URLs), and superseded or pending terms.
-- **Google rich result requirements** for 29 features (Product snippet, Merchant listing, Recipe, Event, Review snippet, Article, Breadcrumb, Job posting, Video, and more), transcribed from Google Search Central's documentation. It marks each item eligible or not eligible and lists exactly what's missing, including "one of" rules (a product snippet needs a review, a rating, *or* an offer). Retired rich results such as FAQ and How-to are reported as notes, not errors: the markup is still valid.
+- **Google rich result requirements** for 30 features (Product snippet, Merchant listing, Recipe, Event, Review snippet, Article, Breadcrumb, Job posting, Video, and more), transcribed from Google Search Central's documentation. It marks each item eligible or not eligible and lists exactly what's missing, including "one of" rules (a product snippet needs a review, a rating, *or* an offer). Retired rich results such as FAQ and How-to are reported as notes, not errors: the markup is still valid.
 
 There's a hosted version with a UI at **[swiftschema.com/tools/schema-validator](https://www.swiftschema.com/tools/schema-validator)**, and a [Rich Results Test tool](https://www.swiftschema.com/tools/rich-results-test) built on the same engine.
 
@@ -67,7 +67,14 @@ report.totals;    // { errors, warnings, infos }
 report.issues;    // [{ severity, category, message, fix, path, docsUrl }]
 report.features;  // [{ name: "Product snippet", result: "eligible" | "missing-required" | "retired", missingRequired, missingRecommended }]
 report.nodes;     // the extracted items, as a tree
+
+// Rules that depend on where the markup lives need the page URL. Site name (WebSite) only
+// applies on a home page; without pageUrl or isHomePage it's skipped, not flagged.
+validateMarkup(html, { pageUrl: "https://example.com/" });
+validateMarkup(html, { isHomePage: true });
 ```
+
+The CLI passes the URL when you validate a live URL. For local files it can't tell which page is the home page, so the Site name check is skipped.
 
 `extractStructuredData(input)` returns just the extracted items (JSON-LD, microdata, and RDFa in one model). `GOOGLE_FEATURES` and `RETIRED_FEATURES` expose the rule tables. CommonJS (`require`) works too.
 

@@ -116,6 +116,41 @@ check("breadcrumb: last item may omit item, middle items may not", () => {
   assert.deepEqual(feature(bad, "breadcrumb").missingRequired, ["ListItem 1: item"]);
 });
 
+check("breadcrumb needs at least two ListItems", () => {
+  const one = validateMarkup(ld({ "@type": "BreadcrumbList", itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Books" },
+  ] }));
+  assert.equal(feature(one, "breadcrumb").result, "missing-required");
+  assert.deepEqual(feature(one, "breadcrumb").missingRequired, ["itemListElement (at least 2 ListItems, found 1)"]);
+  assert.ok(find(one, /Breadcrumb: missing required itemListElement \(at least 2 ListItems/));
+  const two = validateMarkup(ld({ "@type": "BreadcrumbList", itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Books", item: "https://example.com/books" },
+    { "@type": "ListItem", position: 2, name: "Sci-fi", item: "https://example.com/books/sci-fi" },
+  ] }));
+  assert.equal(feature(two, "breadcrumb").result, "eligible");
+});
+
+check("site name: WebSite needs name and url on the home page", () => {
+  const ok = validateMarkup(ld({ "@type": "WebSite", name: "Example", alternateName: "EX", url: "https://example.com/" }), { pageUrl: "https://example.com/" });
+  assert.equal(feature(ok, "site-name").result, "eligible");
+  assert.deepEqual(feature(ok, "site-name").missingRecommended, []);
+  const bad = validateMarkup(ld({ "@type": "WebSite", alternateName: "EX" }), { pageUrl: "https://example.com/?ref=x" });
+  assert.deepEqual(feature(bad, "site-name").missingRequired, ["name", "url"]);
+  assert.ok(find(bad, /Site name: missing required name/));
+  const flag = validateMarkup(ld({ "@type": "WebSite", name: "Example" }), { isHomePage: true });
+  assert.deepEqual(feature(flag, "site-name").missingRequired, ["url"]);
+  assert.deepEqual(feature(flag, "site-name").missingRecommended, ["alternateName"]);
+});
+
+check("site name is skipped off the home page and when the page is unknown", () => {
+  const markup = ld({ "@type": "WebSite", alternateName: "EX" });
+  assert.equal(feature(validateMarkup(markup), "site-name"), undefined);
+  assert.equal(feature(validateMarkup(markup, { pageUrl: "https://example.com/news" }), "site-name"), undefined);
+  assert.equal(feature(validateMarkup(markup, { pageUrl: "not a url" }), "site-name"), undefined);
+  assert.equal(feature(validateMarkup(markup, { isHomePage: false, pageUrl: "https://example.com/" }), "site-name"), undefined);
+  assert.equal(errors(validateMarkup(markup)).filter((issue) => /Site name/.test(issue.message)).length, 0);
+});
+
 check("Article has no required properties", () => {
   const report = validateMarkup(ld({ "@type": "NewsArticle", headline: "Hello" }));
   assert.equal(feature(report, "article").result, "eligible");

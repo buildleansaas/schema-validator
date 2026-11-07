@@ -7,7 +7,8 @@
 //   "^name"       the parent node's property (Google allows the parent's name for nested reviews)
 import type { FeatureStatus } from "./types";
 
-export const GOOGLE_RULES_VERIFIED = "2026-10-07";
+// Breadcrumb and Site name re-verified 2026-11-06; the other features were last verified 2026-10-07.
+export const GOOGLE_RULES_VERIFIED = "2026-11-06";
 
 export interface Requirement {
   anyOf: string[];
@@ -26,6 +27,8 @@ export interface NestedRule {
   requireOne?: boolean;
   required?: Requirement[];
   recommended?: Requirement[];
+  /** The feature needs at least this many nested nodes matching this rule. */
+  minItems?: number;
   /** Requirements skipped for the last item in the list (breadcrumb item URLs). */
   notForLast?: string[];
   label: string;
@@ -45,6 +48,11 @@ export interface FeatureDefinition {
    * are normally nested (reviews, videos, breadcrumbs, policies).
    */
   matchNested?: boolean;
+  /**
+   * Google only reads this feature on a site's home page (the domain or subdomain root). It's
+   * checked only when the caller passes pageUrl or isHomePage; when the page is unknown it's skipped.
+   */
+  homePageOnly?: boolean;
   /** Only check nodes that have at least one of these properties (signals the feature is intended). */
   detectWhenAny?: string[];
   required: Requirement[];
@@ -74,13 +82,15 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
     required: [],
     recommended: list("author", "author.name", "author.url", "dateModified", "datePublished", "headline", "image"),
   },
+  // https://developers.google.com/search/docs/appearance/structured-data/breadcrumb
+  // "a BreadcrumbList that contains at least two ListItems"; the last ListItem may omit item.
   {
     id: "breadcrumb", name: "Breadcrumb", docsUrl: `${DOCS}breadcrumb`, status: "supported",
     matchNested: true, types: ["BreadcrumbList"],
     required: list("itemListElement"),
     recommended: [],
     nested: [{
-      via: "itemListElement", label: "ListItem", types: ["ListItem"],
+      via: "itemListElement", label: "ListItem", types: ["ListItem"], minItems: 2,
       required: [req("position"), { anyOf: ["name", "item.name"], label: "name" }, req("item")],
       notForLast: ["item"],
     }],
@@ -276,6 +286,15 @@ export const GOOGLE_FEATURES: FeatureDefinition[] = [
     matchNested: true, types: ["ShippingService"],
     required: list("shippingConditions"),
     recommended: list("name", "description", "fulfillmentType", "handlingTime"),
+  },
+  // https://developers.google.com/search/docs/appearance/site-names
+  // Required: name, url (the canonical home page). Recommended: alternateName. The WebSite markup
+  // "must be on the home page of the site" (domain or subdomain root; subdirectories aren't supported).
+  {
+    id: "site-name", name: "Site name", docsUrl: "https://developers.google.com/search/docs/appearance/site-names", status: "supported",
+    types: ["WebSite"], homePageOnly: true,
+    required: list("name", "url"),
+    recommended: list("alternateName"),
   },
   {
     id: "speakable", name: "Speakable", docsUrl: `${DOCS}speakable`, status: "limited",

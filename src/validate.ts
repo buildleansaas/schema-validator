@@ -1,6 +1,6 @@
 import { extractStructuredData } from "./extract";
 import { GOOGLE_FEATURES, GOOGLE_RULES_VERIFIED, RETIRED_FEATURES, REVIEWABLE_TYPES, type FeatureDefinition, type Requirement } from "./google-features";
-import type { Extraction, FeatureReport, SdNode, SdValue, ValidationIssue, ValidationReport } from "./types";
+import type { Extraction, FeatureReport, SdNode, SdValue, ValidateOptions, ValidationIssue, ValidationReport } from "./types";
 import {
   basePropertyName,
   getProperty,
@@ -294,6 +294,7 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
         return !(rule.excludeTypes && matchesAny(childTypes, rule.excludeTypes));
       });
     if (rule.requireOne && children.length === 0) missingRequired.push(`${rule.via} (${rule.label})`);
+    if (rule.minItems && children.length < rule.minItems) missingRequired.push(`${rule.via} (at least ${rule.minItems} ${rule.label}s, found ${children.length})`);
     children.forEach((child, index) => {
       const isLast = index === children.length - 1;
       const prefix = children.length > 1 ? `${rule.label} ${index + 1}` : rule.label;
@@ -322,7 +323,21 @@ function checkFeature(graph: Graph, node: SdNode, feature: FeatureDefinition): F
   };
 }
 
-function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
+/** True or false when the page is known to be (or not be) a domain/subdomain root; undefined when unknown. */
+function resolveHomePage(options: ValidateOptions): boolean | undefined {
+  if (typeof options.isHomePage === "boolean") return options.isHomePage;
+  if (!options.pageUrl) return undefined;
+  try {
+    const url = new URL(options.pageUrl);
+    if (!/^https?:$/.test(url.protocol)) return undefined;
+    return url.pathname === "/" || url.pathname === "";
+  } catch {
+    return undefined;
+  }
+}
+
+function checkGoogle(graph: Graph, issues: ValidationIssue[], options: ValidateOptions): FeatureReport[] {
+  const homePage = resolveHomePage(options);
   const reports: FeatureReport[] = [];
   const checkedIds = new Set<string>();
   for (const node of graph.all) {
@@ -340,6 +355,8 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
       if (!matchesAny(types, feature.types)) continue;
       if (feature.excludeTypes && matchesAny(types, feature.excludeTypes)) continue;
       if (!feature.matchNested && !isStandalone(context)) continue;
+      // Home-page-only features are skipped off the home page, and when the page is unknown.
+      if (feature.homePageOnly && homePage !== true) continue;
       if (feature.detectWhenAny && !feature.detectWhenAny.some((path) => graph.has(node, path))) continue;
       const report = checkFeature(graph, node, feature);
       reports.push(report);
@@ -383,7 +400,7 @@ function checkGoogle(graph: Graph, issues: ValidationIssue[]): FeatureReport[] {
 
 // ---------------------------------------------------------------------------------------------
 
-export function validateExtraction(extraction: Extraction): ValidationReport {
+export function validateExtraction(extraction: Extraction, options: ValidateOptions = {}): ValidationReport {
   const issues: ValidationIssue[] = [];
   for (const syntax of extraction.syntaxIssues) {
     if (syntax.format !== "json-ld") {
@@ -402,7 +419,7 @@ export function validateExtraction(extraction: Extraction): ValidationReport {
 
   const graph = new Graph(extraction.nodes);
   checkVocabulary(graph, issues);
-  const features = checkGoogle(graph, issues);
+  const features = checkGoogle(graph, issues, options);
 
   if (!extraction.nodes.length && !extraction.syntaxIssues.length) {
     issues.push({ severity: "info", category: "syntax", message: "No structured data found (no JSON-LD, microdata, or RDFa).", fix: "Paste JSON-LD, a <script type=\"application/ld+json\"> block, or HTML with microdata/RDFa." });
@@ -428,6 +445,6 @@ export function validateExtraction(extraction: Extraction): ValidationReport {
 }
 
 /** Validates raw JSON-LD or an HTML page/fragment containing JSON-LD, microdata, or RDFa. */
-export function validateMarkup(input: string): ValidationReport {
-  return validateExtraction(extractStructuredData(input));
+export function validateMarkup(input: string, options: ValidateOptions = {}): ValidationReport {
+  return validateExtraction(extractStructuredData(input), options);
 }
